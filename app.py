@@ -66,7 +66,7 @@ st.title("⚕️ Triaje Clínico Preventivo")
 st.markdown("### Ingrese los datos solicitados del paciente:")
 
 if et_model is None:
-    st.error("Error crítico: No se encontró la base de datos 'DSCancerGastrointestinal.csv'.")
+    st.error("Error crítico: No se encontró la base de datos 'DSCancerGastrointestinal.zip'.")
     st.stop()
 
 # Formularios en columnas
