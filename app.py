@@ -98,8 +98,9 @@ with col3:
 with col4:
     h_pylori = st.checkbox("Infección por H. Pylori (Activa/Previa)")
     
-    # Se cambia a st.text_input para obligar a escribir y se inicializa con "Ninguna" por defecto
-    condicion_escrita = st.text_input("Condición Preexistente (ej. Ninguna, Gastritis Cronica, Diabetes):", value="Ninguna")
+    # Menú desplegable con las opciones traducidas al español
+    opciones_visuales = ["Ninguna", "Gastritis Crónica", "Diabetes"]
+    condicion_seleccionada = st.selectbox("Condición Preexistente:", opciones_visuales)
 
 st.markdown("---")
 
@@ -111,17 +112,14 @@ if st.button("Evaluar Riesgo Clínico", type="primary"):
     dieta_val = 1 if dieta else 0
     h_pylori_val = 1 if h_pylori else 0
 
-    # Lógica de traducción y procesamiento tolerante a mayúsculas/minúsculas y variaciones de escritura
-    texto_usuario = condicion_escrita.strip().lower()
+    # Diccionario inverso para mapear la selección en español al valor original del dataset en inglés
+    traductor_condiciones = {
+        "Ninguna": "None",
+        "Gastritis Crónica": "Chronic Gastritis",
+        "Diabetes": "Diabetes"
+    }
     
-    if "gastritis" in texto_usuario:
-        val_original = "Chronic Gastritis"
-    elif "diabetes" in texto_usuario:
-        val_original = "Diabetes"
-    else:
-        val_original = "None" # Mapea "Ninguna" o cualquier entrada vacía/no válida al valor por defecto "None"
-
-    # Obtener el código numérico correspondiente al término original del dataset
+    val_original = traductor_condiciones[condicion_seleccionada]
     condicion_val = mapa_condiciones.get(val_original, 0)
 
     # Inyectar medianas para las variables genómicas de fondo
