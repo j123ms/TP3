@@ -35,11 +35,8 @@ def inicializar_modelo():
     df_sanos = df_numeric[df_numeric['Resultados'] == 0]
     df_enfermos = df_numeric[df_numeric['Resultados'] == 1]
 
-    # --- CORRECCIÓN CLAVE ---
-    # Ahora le decimos al modelo que un "sano puro" tampoco fuma, no bebe, 
-    # NO tiene H. Pylori y su condición preexistente es "None".
+    # Filtro de calibración para que el modelo identifique correctamente el peso de las variables
     codigo_none = mapa_condiciones.get("None", 0)
-    
     filtro_puros = (
         (df_sanos['Fumador'] == 0) & 
         (df_sanos['Alcohol'] == 0) & 
@@ -48,13 +45,12 @@ def inicializar_modelo():
         (df_sanos['helicobacter_pylori_infection'] == 0) & 
         (df_sanos['Condiciones'] == codigo_none)
     )
-    # ------------------------
 
     sanos_puros = df_sanos[filtro_puros]
     sanos_comunes = df_sanos[~filtro_puros]
 
     cantidad_necesaria = len(df_enfermos)
-    cantidad_puros = min(len(sanos_puros), cantidad_necesaria // 2)
+    cantidad_puros = min(len(sanos_puros), quantity_necesaria // 2 if 'quantity_necesaria' in locals() else cantidad_necesaria // 2)
     cantidad_comunes = cantidad_necesaria - cantidad_puros
 
     muestra_puros = sanos_puros.sample(n=cantidad_puros, random_state=42)
@@ -143,12 +139,16 @@ if st.button("Evaluar Riesgo Clínico", type="primary"):
     df_input = pd.DataFrame(full_data)
     df_input = df_input[columnas_modelo]
 
-    # Predicción
-    pred = et_model.predict(df_input)[0]
+    # Predicción y cálculo de probabilidad
     probs = et_model.predict_proba(df_input)[0]
     prob_riesgo = probs[1] * 100
 
-    if pred == 1 or prob_riesgo >= 45: 
-        st.error(f"**⚠️ ALTA PROBABILIDAD DE MALIGNIDAD**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nSe recomienda priorizar endoscopia digestiva alta y evaluación especializada inmediata.")
+    # --- LÓGICA DE SALIDA TIPO SEMÁFORO ---
+    st.markdown("### Resultado de la Evaluación:")
+    
+    if prob_riesgo >= 65:
+        st.error(f"**🔴 ALTO RIESGO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nSe recomienda priorizar de manera urgente una endoscopia digestiva alta y evaluación especializada inmediata.")
+    elif 35 <= prob_riesgo < 65:
+        st.warning(f"**🟡 RIESGO MODERADO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nSe sugiere programar una consulta de seguimiento clínico, control de factores de riesgo y monitoreo periódico de síntomas.")
     else:
-        st.success(f"**✅ RIESGO ONCOLÓGICO BAJO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nPerfil clínico favorable según marcadores actuales.")
+        st.success(f"**🟢 BAJO RIESGO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nPerfil clínico favorable según los factores analizados. Continuar con controles rutinarios y hábitos saludables.")
