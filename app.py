@@ -14,7 +14,7 @@ def inicializar_modelo():
     ruta_zip = 'DSCancerGastrointestinal.zip' 
     
     if not os.path.exists(ruta_zip):
-        return None, None, None, None, None
+        return None, None, None, None
         
     dataFrame = pd.read_csv(ruta_zip, sep=';', compression='zip')
     
@@ -22,17 +22,15 @@ def inicializar_modelo():
     dataFrame = dataFrame.drop(columns=columnas_a_borrar, errors='ignore')
     dataFrame['Resultados'] = dataFrame['Resultados'].astype('int')
     
-    # Procesamiento limpio de "Condiciones" sin validaciones de nulos
+    # Procesamiento interno de la columna categórica "Condiciones"
     if 'Condiciones' in dataFrame.columns:
         condiciones_cat = dataFrame['Condiciones'].astype('category')
         mapa_condiciones = {categoria: codigo for codigo, categoria in enumerate(condiciones_cat.cat.categories)}
-        opciones_condiciones = list(mapa_condiciones.keys())
         dataFrame['Condiciones'] = condiciones_cat.cat.codes
     else:
         mapa_condiciones = {"None": 0}
-        opciones_condiciones = ["None"]
 
-    # helicobacter_pylori_infection (0 y 1) pasará automáticamente aquí junto a las demás numéricas
+    # helicobacter_pylori_infection (0 y 1) se incluye de forma nativa aquí
     df_numeric = dataFrame.select_dtypes(include=['number'])
 
     df_sanos = df_numeric[df_numeric['Resultados'] == 0]
@@ -66,10 +64,10 @@ def inicializar_modelo():
     
     columnas_modelo = X.columns.tolist()
     
-    return et_model, columnas_modelo, df_numeric, opciones_condiciones, mapa_condiciones
+    return et_model, columnas_modelo, df_numeric, mapa_condiciones
 
 # Cargar el modelo
-et_model, columnas_modelo, df_numeric, opciones_condiciones, mapa_condiciones = inicializar_modelo()
+et_model, columnas_modelo, df_numeric, mapa_condiciones = inicializar_modelo()
 
 # Interfaz de Usuario
 st.title("⚕️ Screening Oncológico Integral")
@@ -100,9 +98,8 @@ with col3:
 with col4:
     h_pylori = st.checkbox("Infección por H. Pylori (Activa/Previa)")
     
-    # Si "None" es una opción, la colocamos como valor por defecto (index=opciones_condiciones.index('None'))
-    index_defecto = opciones_condiciones.index("None") if "None" in opciones_condiciones else 0
-    condicion_seleccionada = st.selectbox("Condición Preexistente:", opciones_condiciones, index=index_defecto)
+    # Se cambia a st.text_input para obligar a escribir y se inicializa con "Ninguna" por defecto
+    condicion_escrita = st.text_input("Condición Preexistente (ej. Ninguna, Gastritis Cronica, Diabetes):", value="Ninguna")
 
 st.markdown("---")
 
@@ -113,7 +110,19 @@ if st.button("Evaluar Riesgo Clínico", type="primary"):
     alcohol_val = 1 if alcohol else 0
     dieta_val = 1 if dieta else 0
     h_pylori_val = 1 if h_pylori else 0
-    condicion_val = mapa_condiciones[condicion_seleccionada] 
+
+    # Lógica de traducción y procesamiento tolerante a mayúsculas/minúsculas y variaciones de escritura
+    texto_usuario = condicion_escrita.strip().lower()
+    
+    if "gastritis" in texto_usuario:
+        val_original = "Chronic Gastritis"
+    elif "diabetes" in texto_usuario:
+        val_original = "Diabetes"
+    else:
+        val_original = "None" # Mapea "Ninguna" o cualquier entrada vacía/no válida al valor por defecto "None"
+
+    # Obtener el código numérico correspondiente al término original del dataset
+    condicion_val = mapa_condiciones.get(val_original, 0)
 
     # Inyectar medianas para las variables genómicas de fondo
     full_data = {col: [df_numeric[col].median()] for col in columnas_modelo}
