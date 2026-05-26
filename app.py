@@ -22,7 +22,7 @@ def inicializar_modelo():
     dataFrame = dataFrame.drop(columns=columnas_a_borrar, errors='ignore')
     dataFrame['Resultados'] = dataFrame['Resultados'].astype('int')
     
-    # Procesamiento interno de la columna categórica "Condiciones"
+    # Procesamiento de "Condiciones"
     if 'Condiciones' in dataFrame.columns:
         condiciones_cat = dataFrame['Condiciones'].astype('category')
         mapa_condiciones = {categoria: codigo for codigo, categoria in enumerate(condiciones_cat.cat.categories)}
@@ -30,18 +30,25 @@ def inicializar_modelo():
     else:
         mapa_condiciones = {"None": 0}
 
-    # helicobacter_pylori_infection (0 y 1) se incluye de forma nativa aquí
     df_numeric = dataFrame.select_dtypes(include=['number'])
 
     df_sanos = df_numeric[df_numeric['Resultados'] == 0]
     df_enfermos = df_numeric[df_numeric['Resultados'] == 1]
 
+    # --- CORRECCIÓN CLAVE ---
+    # Ahora le decimos al modelo que un "sano puro" tampoco fuma, no bebe, 
+    # NO tiene H. Pylori y su condición preexistente es "None".
+    codigo_none = mapa_condiciones.get("None", 0)
+    
     filtro_puros = (
         (df_sanos['Fumador'] == 0) & 
         (df_sanos['Alcohol'] == 0) & 
         (df_sanos['HistoFamiliar'] == 0) & 
-        (df_sanos['Dieta'] == 0)
+        (df_sanos['Dieta'] == 0) &
+        (df_sanos['helicobacter_pylori_infection'] == 0) & 
+        (df_sanos['Condiciones'] == codigo_none)
     )
+    # ------------------------
 
     sanos_puros = df_sanos[filtro_puros]
     sanos_comunes = df_sanos[~filtro_puros]
@@ -98,7 +105,6 @@ with col3:
 with col4:
     h_pylori = st.checkbox("Infección por H. Pylori (Activa/Previa)")
     
-    # Menú desplegable con las opciones traducidas al español
     opciones_visuales = ["Ninguna", "Gastritis Crónica", "Diabetes"]
     condicion_seleccionada = st.selectbox("Condición Preexistente:", opciones_visuales)
 
@@ -112,7 +118,6 @@ if st.button("Evaluar Riesgo Clínico", type="primary"):
     dieta_val = 1 if dieta else 0
     h_pylori_val = 1 if h_pylori else 0
 
-    # Diccionario inverso para mapear la selección en español al valor original del dataset en inglés
     traductor_condiciones = {
         "Ninguna": "None",
         "Gastritis Crónica": "Chronic Gastritis",
