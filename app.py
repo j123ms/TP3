@@ -180,9 +180,9 @@ if ejecutar_analisis:
 
         with col_res2:
             if prob_riesgo >= 50:
-                st.error("### 🔴 Nivel: ALTO RIESGO\n\n**Recomendación:** Se requiere una evaluación especializada inmediata. Considere derivar para estudios endoscópicos a la brevedad.")
+                st.error("### 🔴 Nivel: ALTO RIESGO\n\n**Recomendación:** Se requiere una evaluación especializada.")
             elif 35 <= prob_riesgo < 50:
-                st.warning("### 🟡 Nivel: RIESGO MODERADO\n\n**Recomendación:** Se sugiere programar una consulta médica preventiva, establecer control de factores de riesgo y mantener monitoreo activo.")
+                st.warning("### 🟡 Nivel: RIESGO MODERADO\n\n**Recomendación:** Se sugiere programar una consulta médica preventiva.")
             else:
                 st.success("### 🟢 Nivel: BAJO RIESGO\n\n**Recomendación:** Perfil clínico favorable de acuerdo a las variables analizadas. Mantener hábitos saludables y controles rutinarios.")
 
