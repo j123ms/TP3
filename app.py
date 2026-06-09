@@ -129,7 +129,7 @@ with st.sidebar:
 
 # --- PANEL PRINCIPAL: RESULTADOS ---
 st.markdown('<p class="main-header">⚕️ Evaluación Oncológica Integral</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Sistema de apoyo a la decisión clínica basado en algoritmos de clasificación de múltiples árboles.</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Sistema de apoyo a la decisión clínica.</p>', unsafe_allow_html=True)
 
 if ejecutar_analisis:
     with st.spinner('Procesando variables clínicas y calculando probabilidad...'):
