@@ -7,7 +7,7 @@ from sklearn.ensemble import ExtraTreesClassifier
 warnings.filterwarnings('ignore')
 
 # Configuración de la interfaz web
-st.set_page_config(page_title="Screening Oncológico Integral", page_icon="⚕️", layout="centered")
+st.set_page_config(page_title="Evaluación Oncológica Integral", page_icon="⚕️", layout="centered")
 
 @st.cache_resource
 def inicializar_modelo():
@@ -50,7 +50,7 @@ def inicializar_modelo():
     sanos_comunes = df_sanos[~filtro_puros]
 
     cantidad_necesaria = len(df_enfermos)
-    cantidad_puros = min(len(sanos_puros), quantity_necesaria // 2 if 'quantity_necesaria' in locals() else cantidad_necesaria // 2)
+    cantidad_puros = min(len(sanos_puros), cantidad_necesaria // 2)
     cantidad_comunes = cantidad_necesaria - cantidad_puros
 
     muestra_puros = sanos_puros.sample(n=cantidad_puros, random_state=42)
@@ -73,7 +73,7 @@ def inicializar_modelo():
 et_model, columnas_modelo, df_numeric, mapa_condiciones = inicializar_modelo()
 
 # Interfaz de Usuario
-st.title("⚕️ Screening Oncológico Integral")
+st.title("⚕️ Evaluación Oncológica Integral")
 st.markdown("### Ingrese los datos clínicos del paciente:")
 
 if et_model is None:
@@ -147,8 +147,8 @@ if st.button("Evaluar Riesgo Clínico", type="primary"):
     st.markdown("### Resultado de la Evaluación:")
     
     if prob_riesgo >= 65:
-        st.error(f"**🔴 ALTO RIESGO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nSe recomienda priorizar de manera urgente una endoscopia digestiva alta y evaluación especializada inmediata.")
+        st.error(f"**🔴 ALTO RIESGO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nSe recomienda una evaluación especializada")
     elif 35 <= prob_riesgo < 65:
-        st.warning(f"**🟡 RIESGO MODERADO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nSe sugiere programar una consulta de seguimiento clínico, control de factores de riesgo y monitoreo periódico de síntomas.")
+        st.warning(f"**🟡 RIESGO MODERADO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nSe sugiere programar una consulta")
     else:
-        st.success(f"**🟢 BAJO RIESGO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nPerfil clínico favorable según los factores analizados. Continuar con controles rutinarios y hábitos saludables.")
+        st.success(f"**🟢 BAJO RIESGO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nPerfil clínico favorable")
