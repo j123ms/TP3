@@ -146,9 +146,9 @@ if st.button("Evaluar Riesgo Clínico", type="primary"):
     # --- LÓGICA DE SALIDA TIPO SEMÁFORO ---
     st.markdown("### Resultado de la Evaluación:")
     
-    if prob_riesgo >= 65:
+    if prob_riesgo >= 50:
         st.error(f"**🔴 ALTO RIESGO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nSe recomienda una evaluación especializada")
-    elif 35 <= prob_riesgo < 65:
+    elif 35 <= prob_riesgo < 50:
         st.warning(f"**🟡 RIESGO MODERADO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nSe sugiere programar una consulta")
     else:
         st.success(f"**🟢 BAJO RIESGO**\n\nProbabilidad Predictiva: **{prob_riesgo:.1f}%**\n\nPerfil clínico favorable")
