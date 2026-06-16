@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import warnings
 from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.model_selection import cross_val_score # <-- NUEVO: Importación para validación cruzada
 
 warnings.filterwarnings('ignore')
 
@@ -44,7 +45,7 @@ def inicializar_modelo():
     ruta_zip = 'DSCancerGastrointestinal.zip' 
     
     if not os.path.exists(ruta_zip):
-        return None, None, None, None
+        return None, None, None, None, None, None # Se agregaron más Nones para los nuevos retornos
         
     dataFrame = pd.read_csv(ruta_zip, sep=';', compression='zip')
     
@@ -91,14 +92,24 @@ def inicializar_modelo():
     y = df_calibrado['Resultados']
     
     et_model = ExtraTreesClassifier(n_estimators=100, random_state=42)
+    
+    # --- NUEVO: VALIDACIÓN CRUZADA (Cross-Validation) ---
+    # Realizamos una validación cruzada con 5 particiones (folds)
+    # Esto evalúa el modelo internamente antes de hacer el fit final
+    scores = cross_val_score(et_model, X, y, cv=5, scoring='accuracy')
+    cv_mean = scores.mean()
+    cv_std = scores.std()
+    # ----------------------------------------------------
+    
+    # Entrenamiento final con toda la data para usar en producción
     et_model.fit(X, y)
     
     columnas_modelo = X.columns.tolist()
     
-    return et_model, columnas_modelo, df_numeric, mapa_condiciones
+    return et_model, columnas_modelo, df_numeric, mapa_condiciones, cv_mean, cv_std
 
-# Cargar el modelo
-et_model, columnas_modelo, df_numeric, mapa_condiciones = inicializar_modelo()
+# Cargar el modelo (ahora desempaqueta también las métricas de CV)
+et_model, columnas_modelo, df_numeric, mapa_condiciones, cv_mean, cv_std = inicializar_modelo()
 
 if et_model is None:
     st.error("Error crítico: No se encontró la base de datos 'DSCancerGastrointestinal.zip'.")
@@ -126,6 +137,13 @@ with st.sidebar:
     
     st.markdown("<br>", unsafe_allow_html=True)
     ejecutar_analisis = st.button("Evaluar Riesgo Clínico", type="primary")
+
+    # --- NUEVO: MOSTRAR RESULTADOS DE VALIDACIÓN CRUZADA ---
+    st.markdown("---")
+    st.markdown("### 📊 Rendimiento del Modelo")
+    st.caption(f"**Precisión (CV 5-Folds):** {cv_mean * 100:.2f}%")
+    st.caption(f"**Margen de error (Desviación):** ± {cv_std * 100:.2f}%")
+    # --------------------------------------------------------
 
 # --- PANEL PRINCIPAL: RESULTADOS ---
 st.markdown('<p class="main-header">⚕️ Evaluación Oncológica Integral</p>', unsafe_allow_html=True)
