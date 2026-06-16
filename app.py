@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import os
 import warnings
 from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.model_selection import cross_val_score # <-- NUEVO: Importación para validación cruzada
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import accuracy_score
 
 warnings.filterwarnings('ignore')
 
@@ -45,7 +47,7 @@ def inicializar_modelo():
     ruta_zip = 'DSCancerGastrointestinal.zip' 
     
     if not os.path.exists(ruta_zip):
-        return None, None, None, None, None, None # Se agregaron más Nones para los nuevos retornos
+        return None, None, None, None, None, None
         
     dataFrame = pd.read_csv(ruta_zip, sep=';', compression='zip')
     
@@ -61,54 +63,106 @@ def inicializar_modelo():
         mapa_condiciones = {"None": 0}
 
     df_numeric = dataFrame.select_dtypes(include=['number'])
-
-    df_sanos = df_numeric[df_numeric['Resultados'] == 0]
-    df_enfermos = df_numeric[df_numeric['Resultados'] == 1]
-
     codigo_none = mapa_condiciones.get("None", 0)
-    filtro_puros = (
-        (df_sanos['Fumador'] == 0) & 
-        (df_sanos['Alcohol'] == 0) & 
-        (df_sanos['HistoFamiliar'] == 0) & 
-        (df_sanos['Dieta'] == 0) &
-        (df_sanos['helicobacter_pylori_infection'] == 0) & 
-        (df_sanos['Condiciones'] == codigo_none)
+
+    # Preparar datos completos para K-Fold
+    X_full = df_numeric.drop(columns=['Resultados'])
+    y_full = df_numeric['Resultados']
+
+    # --- INICIO DE VALIDACIÓN CRUZADA ESTRATIFICADA (5-FOLDS) ---
+    # StratifiedKFold asegura que la proporción de enfermos/sanos se mantenga en cada partición
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    scores_cv = []
+
+    for train_index, test_index in skf.split(X_full, y_full):
+        # 1. Separar particiones
+        X_train, X_test = X_full.iloc[train_index], X_full.iloc[test_index]
+        y_train, y_test = y_full.iloc[train_index], y_full.iloc[test_index]
+        
+        df_train = pd.concat([X_train, y_train], axis=1)
+        
+        # 2. Aplicar BALANCEO EXCLUSIVAMENTE AL CONJUNTO DE ENTRENAMIENTO (Train)
+        df_sanos_train = df_train[df_train['Resultados'] == 0]
+        df_enfermos_train = df_train[df_train['Resultados'] == 1]
+        
+        filtro_puros_train = (
+            (df_sanos_train['Fumador'] == 0) & 
+            (df_sanos_train['Alcohol'] == 0) & 
+            (df_sanos_train['HistoFamiliar'] == 0) & 
+            (df_sanos_train['Dieta'] == 0) &
+            (df_sanos_train['helicobacter_pylori_infection'] == 0) & 
+            (df_sanos_train['Condiciones'] == codigo_none)
+        )
+        
+        sanos_puros_train = df_sanos_train[filtro_puros_train]
+        sanos_comunes_train = df_sanos_train[~filtro_puros_train]
+        
+        cantidad_necesaria = len(df_enfermos_train)
+        cantidad_puros = min(len(sanos_puros_train), cantidad_necesaria // 2)
+        cantidad_comunes = cantidad_necesaria - cantidad_puros
+        
+        # Ajuste de seguridad por si una partición tiene menos comunes de lo esperado
+        if len(sanos_comunes_train) < cantidad_comunes:
+            cantidad_comunes = len(sanos_comunes_train)
+            cantidad_puros = cantidad_necesaria - cantidad_comunes
+            
+        muestra_puros = sanos_puros_train.sample(n=cantidad_puros, random_state=42)
+        muestra_comunes = sanos_comunes_train.sample(n=cantidad_comunes, random_state=42)
+        
+        df_train_balanceado = pd.concat([muestra_puros, muestra_comunes, df_enfermos_train]).sample(frac=1, random_state=42)
+        
+        X_train_bal = df_train_balanceado.drop(columns=['Resultados'])
+        y_train_bal = df_train_balanceado['Resultados']
+        
+        # 3. Entrenar el modelo iterativo
+        fold_model = ExtraTreesClassifier(n_estimators=100, random_state=42)
+        fold_model.fit(X_train_bal, y_train_bal)
+        
+        # 4. Validar contra el conjunto Test ORIGINAL (Desbalanceado)
+        y_pred = fold_model.predict(X_test)
+        scores_cv.append(accuracy_score(y_test, y_pred))
+
+    cv_mean = np.mean(scores_cv)
+    cv_std = np.std(scores_cv)
+    # --- FIN DE VALIDACIÓN CRUZADA ---
+
+    # --- ENTRENAMIENTO FINAL (PRODUCCIÓN) ---
+    # Una vez validada la metodología, entrenamos el modelo final con el 100% de la data balanceada
+    df_sanos_full = df_numeric[df_numeric['Resultados'] == 0]
+    df_enfermos_full = df_numeric[df_numeric['Resultados'] == 1]
+    
+    filtro_puros_full = (
+        (df_sanos_full['Fumador'] == 0) & 
+        (df_sanos_full['Alcohol'] == 0) & 
+        (df_sanos_full['HistoFamiliar'] == 0) & 
+        (df_sanos_full['Dieta'] == 0) &
+        (df_sanos_full['helicobacter_pylori_infection'] == 0) & 
+        (df_sanos_full['Condiciones'] == codigo_none)
     )
-
-    sanos_puros = df_sanos[filtro_puros]
-    sanos_comunes = df_sanos[~filtro_puros]
-
-    cantidad_necesaria = len(df_enfermos)
-    cantidad_puros = min(len(sanos_puros), cantidad_necesaria // 2)
-    cantidad_comunes = cantidad_necesaria - cantidad_puros
-
-    muestra_puros = sanos_puros.sample(n=cantidad_puros, random_state=42)
-    muestra_comunes = sanos_comunes.sample(n=cantidad_comunes, random_state=42)
-
-    df_sanos_final = pd.concat([muestra_puros, muestra_comunes])
-    df_calibrado = pd.concat([df_sanos_final, df_enfermos]).sample(frac=1, random_state=42)
-
-    X = df_calibrado.drop(columns=['Resultados'])
-    y = df_calibrado['Resultados']
     
-    et_model = ExtraTreesClassifier(n_estimators=100, random_state=42)
+    sanos_puros_full = df_sanos_full[filtro_puros_full]
+    sanos_comunes_full = df_sanos_full[~filtro_puros_full]
     
-    # --- NUEVO: VALIDACIÓN CRUZADA (Cross-Validation) ---
-    # Realizamos una validación cruzada con 5 particiones (folds)
-    # Esto evalúa el modelo internamente antes de hacer el fit final
-    scores = cross_val_score(et_model, X, y, cv=5, scoring='accuracy')
-    cv_mean = scores.mean()
-    cv_std = scores.std()
-    # ----------------------------------------------------
+    cant_nec_full = len(df_enfermos_full)
+    cant_puros_full = min(len(sanos_puros_full), cant_nec_full // 2)
+    cant_comunes_full = cant_nec_full - cant_puros_full
     
-    # Entrenamiento final con toda la data para usar en producción
-    et_model.fit(X, y)
+    m_puros_full = sanos_puros_full.sample(n=cant_puros_full, random_state=42)
+    m_comunes_full = sanos_comunes_full.sample(n=cant_comunes_full, random_state=42)
     
-    columnas_modelo = X.columns.tolist()
+    df_final_calibrado = pd.concat([m_puros_full, m_comunes_full, df_enfermos_full]).sample(frac=1, random_state=42)
     
-    return et_model, columnas_modelo, df_numeric, mapa_condiciones, cv_mean, cv_std
+    X_final = df_final_calibrado.drop(columns=['Resultados'])
+    y_final = df_final_calibrado['Resultados']
+    
+    et_model_final = ExtraTreesClassifier(n_estimators=100, random_state=42)
+    et_model_final.fit(X_final, y_final)
+    
+    columnas_modelo = X_full.columns.tolist()
+    
+    return et_model_final, columnas_modelo, df_numeric, mapa_condiciones, cv_mean, cv_std
 
-# Cargar el modelo (ahora desempaqueta también las métricas de CV)
+# Cargar el modelo
 et_model, columnas_modelo, df_numeric, mapa_condiciones, cv_mean, cv_std = inicializar_modelo()
 
 if et_model is None:
@@ -138,12 +192,12 @@ with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
     ejecutar_analisis = st.button("Evaluar Riesgo Clínico", type="primary")
 
-    # --- NUEVO: MOSTRAR RESULTADOS DE VALIDACIÓN CRUZADA ---
+    # Mostrar métricas validadas sin filtrado de datos
     st.markdown("---")
     st.markdown("### 📊 Rendimiento del Modelo")
-    st.caption(f"**Precisión (CV 5-Folds):** {cv_mean * 100:.2f}%")
-    st.caption(f"**Margen de error (Desviación):** ± {cv_std * 100:.2f}%")
-    # --------------------------------------------------------
+    st.caption("Validación experimental sin *data leakage*.")
+    st.caption(f"**Exactitud (CV 5-Folds):** {cv_mean * 100:.2f}%")
+    st.caption(f"**Desviación Estándar:** ± {cv_std * 100:.2f}%")
 
 # --- PANEL PRINCIPAL: RESULTADOS ---
 st.markdown('<p class="main-header">⚕️ Evaluación Oncológica Integral</p>', unsafe_allow_html=True)
@@ -170,7 +224,6 @@ if ejecutar_analisis:
         # Inyectar medianas para variables de fondo
         full_data = {col: [df_numeric[col].median()] for col in columnas_modelo}
         
-        # Asignar inputs del usuario con estricta validación
         if 'Edad' in full_data: full_data['Edad'] = [int(edad)]
         if 'Genero' in full_data: full_data['Genero'] = [genero_val]
         if 'HistoFamiliar' in full_data: full_data['HistoFamiliar'] = [familia_val]
@@ -190,7 +243,6 @@ if ejecutar_analisis:
         st.markdown("### Resumen de Evaluación")
         st.divider()
 
-        # Presentación Formal de Resultados
         col_res1, col_res2 = st.columns([1, 2])
         
         with col_res1:
@@ -207,5 +259,4 @@ if ejecutar_analisis:
 else:
     st.info("👈 Por favor, complete los datos en el panel lateral y haga clic en **'Evaluar Riesgo Clínico'** para generar el reporte.")
 
-# Disclaimer Legal/Formal
 st.markdown('<div class="disclaimer"><strong>Aviso legal:</strong> Esta herramienta utiliza modelos de aprendizaje automático basados en datos estadísticos para estimar factores de riesgo. Los resultados proporcionados son de carácter informativo y de apoyo a la decisión. Bajo ninguna circunstancia sustituyen un diagnóstico clínico profesional, consejo médico o evaluación presencial realizada por un especialista calificado.</div>', unsafe_allow_html=True)
