@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import warnings
-from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score
 
@@ -70,7 +70,6 @@ def inicializar_modelo():
     y_full = df_numeric['Resultados']
 
     # --- INICIO DE VALIDACIÓN CRUZADA ESTRATIFICADA (5-FOLDS) ---
-    # StratifiedKFold asegura que la proporción de enfermos/sanos se mantenga en cada partición
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     scores_cv = []
 
@@ -114,8 +113,8 @@ def inicializar_modelo():
         X_train_bal = df_train_balanceado.drop(columns=['Resultados'])
         y_train_bal = df_train_balanceado['Resultados']
         
-        # 3. Entrenar el modelo iterativo
-        fold_model = ExtraTreesClassifier(n_estimators=100, random_state=42)
+        # 3. Entrenar el modelo iterativo con Random Forest
+        fold_model = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
         fold_model.fit(X_train_bal, y_train_bal)
         
         # 4. Validar contra el conjunto Test ORIGINAL (Desbalanceado)
@@ -127,7 +126,6 @@ def inicializar_modelo():
     # --- FIN DE VALIDACIÓN CRUZADA ---
 
     # --- ENTRENAMIENTO FINAL (PRODUCCIÓN) ---
-    # Una vez validada la metodología, entrenamos el modelo final con el 100% de la data balanceada
     df_sanos_full = df_numeric[df_numeric['Resultados'] == 0]
     df_enfermos_full = df_numeric[df_numeric['Resultados'] == 1]
     
@@ -155,17 +153,17 @@ def inicializar_modelo():
     X_final = df_final_calibrado.drop(columns=['Resultados'])
     y_final = df_final_calibrado['Resultados']
     
-    et_model_final = ExtraTreesClassifier(n_estimators=100, random_state=42)
-    et_model_final.fit(X_final, y_final)
+    rf_model_final = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+    rf_model_final.fit(X_final, y_final)
     
     columnas_modelo = X_full.columns.tolist()
     
-    return et_model_final, columnas_modelo, df_numeric, mapa_condiciones, cv_mean, cv_std
+    return rf_model_final, columnas_modelo, df_numeric, mapa_condiciones, cv_mean, cv_std
 
 # Cargar el modelo
-et_model, columnas_modelo, df_numeric, mapa_condiciones, cv_mean, cv_std = inicializar_modelo()
+rf_model, columnas_modelo, df_numeric, mapa_condiciones, cv_mean, cv_std = inicializar_modelo()
 
-if et_model is None:
+if rf_model is None:
     st.error("Error crítico: No se encontró la base de datos 'DSCancerGastrointestinal.zip'.")
     st.stop()
 
@@ -235,8 +233,8 @@ if ejecutar_analisis:
         
         df_input = pd.DataFrame(full_data)[columnas_modelo]
 
-        # Predicción
-        probs = et_model.predict_proba(df_input)[0]
+        # Predicción usando el nuevo modelo de Random Forest
+        probs = rf_model.predict_proba(df_input)[0]
         prob_riesgo = float(probs[1] * 100)
         prob_formateada = f"{prob_riesgo:.2f} %" # Formateo estricto a 2 decimales sin notación científica
 
